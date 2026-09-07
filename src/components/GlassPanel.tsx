@@ -2,23 +2,20 @@ import { useEffect, useMemo } from 'react'
 import type { ThreeElements } from '@react-three/fiber'
 import {
   MeshPhysicalNodeMaterial,
+  type Node,
   type Vector3,
 } from 'three/webgpu'
 import {
-  abs,
-  clamp,
-  color,
-  dot,
-  float,
-  mix,
+  cameraPosition,
+  glslFn,
   modelNormalMatrix,
   normalize,
   positionWorld,
-  smoothstep,
   uniform,
   vec3,
-  vec4,
 } from 'three/tsl'
+import glassShadowMapSource from '../shaders/glassShadowMap.glsl?raw'
+import glassViewDiffuseSource from '../shaders/glassViewDiffuse.glsl?raw'
 
 export const GLASS_WIDTH_METERS = 1
 export const GLASS_HEIGHT_METERS = 1
@@ -27,6 +24,14 @@ export const GLASS_THICKNESS_METERS = 0.02
 type GlassPanelProps = ThreeElements['group'] & {
   lightPosition: Vector3
 }
+
+// Three injects this native GLSL function into the shadow-map fragment shader.
+// The function itself—not JavaScript—calculates the final shadow RGB and alpha.
+const glassShadowMapShader = glslFn(glassShadowMapSource)
+
+// This native GLSL function runs in the visible material fragment shader.
+// It only returns RGB, so it cannot change the glass opacity.
+const glassViewDiffuseShader = glslFn(glassViewDiffuseSource)
 
 function createAngleShadowGlass(lightPosition: Vector3) {
   const material = new MeshPhysicalNodeMaterial({
@@ -43,29 +48,25 @@ function createAngleShadowGlass(lightPosition: Vector3) {
   })
 
   const lightPositionNode = uniform(lightPosition)
-  const directionToLight = normalize(lightPositionNode.sub(positionWorld))
   const panelNormalWorld = normalize(modelNormalMatrix.mul(vec3(0, 0, 1)))
+  // glslFn's current typings erase the declared GLSL return type; the shader
+  // declaration above guarantees this node is a vec3 at compile time.
+  const cameraAngleColor = glassViewDiffuseShader(
+    panelNormalWorld,
+    positionWorld,
+    cameraPosition,
+  ) as Node<'vec3'>
 
-  // Use the panel's fixed local +Z normal instead of the box face normal so
-  // every shadow fragment responds to the glass object's rotation as a whole.
-  // abs(dot(N, L)) maps the light-to-plane angle from 0° to 90°.
-  const incidence = clamp(abs(dot(panelNormalWorld, directionToLight)), 0, 1)
+  // Apply the shader RGB both to the diffuse surface and the transmitted tint.
+  // Opacity and transmission remain fixed by the physical material settings.
+  material.colorNode = cameraAngleColor
+  material.attenuationColorNode = cameraAngleColor
 
-  // Preserve a true black endpoint, quickly enter dark purple, then move
-  // smoothly toward pale blue as the incidence angle approaches 90°.
-  const purpleEntry = smoothstep(float(0), float(0.08), incidence)
-  const blueProgress = smoothstep(float(0.35), float(1), incidence)
-  const blackToPurple = mix(color('#000000'), color('#250047'), purpleEntry)
-  const shadowColor = mix(blackToPurple, color('#9addff'), blueProgress)
-
-  // Grazing incidence is dense; face-on incidence transmits more light.
-  const shadowOpacity = mix(
-    float(0.96),
-    float(0.32),
-    smoothstep(float(0), float(1), incidence),
+  material.castShadowNode = glassShadowMapShader(
+    panelNormalWorld,
+    positionWorld,
+    lightPositionNode,
   )
-
-  material.castShadowNode = vec4(shadowColor, shadowOpacity)
 
   return material
 }
