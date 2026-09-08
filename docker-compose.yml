@@ -1,0 +1,72 @@
+name: cam-test
+
+services:
+  app:
+    image: "${IMAGE_NAME:?Set IMAGE_NAME in .env}:${IMAGE_TAG:-latest}"
+    restart: unless-stopped
+    init: true
+    expose:
+      - "80"
+    networks:
+      - proxy
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: "${TRAEFIK_NETWORK:-cam-test-proxy}"
+      traefik.http.routers.cam-test.rule: "Host(`${APP_HOST:?Set APP_HOST in .env}`)"
+      traefik.http.routers.cam-test.entrypoints: "websecure"
+      traefik.http.routers.cam-test.tls: "true"
+      traefik.http.routers.cam-test.tls.certresolver: "letsencrypt"
+      traefik.http.services.cam-test.loadbalancer.server.port: "80"
+      com.centurylinklabs.watchtower.enable: "true"
+
+  traefik:
+    image: traefik:v3.7
+    restart: unless-stopped
+    init: true
+    command:
+      - "--api.dashboard=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=${TRAEFIK_NETWORK:-cam-test-proxy}"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?Set ACME_EMAIL in .env}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
+    networks:
+      - proxy
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+
+  watchtower:
+    image: containrrr/watchtower:1.7.1
+    restart: unless-stopped
+    environment:
+      DOCKER_API_VERSION: "${DOCKER_API_VERSION:-1.44}"
+      DOCKER_CONFIG: /config
+      TZ: "${TZ:-Europe/Istanbul}"
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_POLL_INTERVAL: "${WATCHTOWER_POLL_INTERVAL:-300}"
+      WATCHTOWER_ROLLING_RESTART: "true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - "${DOCKER_CONFIG_DIR:-/root/.docker}:/config:ro"
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+
+networks:
+  proxy:
+    name: "${TRAEFIK_NETWORK:-cam-test-proxy}"
+
+volumes:
+  traefik_letsencrypt:
+
