@@ -401,11 +401,7 @@ function App() {
           ) : (
             <div className="preview-placeholder" aria-hidden="true" />
           )}
-          <div className="map-copy">
-            <span>Grayscale → Y rotation</span>
-            <strong>0 → 45°</strong>
-            <strong>255 → 0°</strong>
-          </div>
+          
         </div>
 
         {inputMode === 'image' && processingError && (
@@ -420,20 +416,6 @@ function App() {
           </p>
         )}
 
-        <dl className="render-stats">
-          <div>
-            <dt>Light</dt>
-            <dd>center · Z +5</dd>
-          </div>
-          <div>
-            <dt>Geometry</dt>
-            <dd>one InstancedMesh</dd>
-          </div>
-          <div>
-            <dt>Rendering</dt>
-            <dd>one draw per pass</dd>
-          </div>
-        </dl>
 
         <p className="hint">Drag to orbit and inspect the angle-mapped tiles</p>
       </aside>

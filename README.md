@@ -1,46 +1,52 @@
-# Cam Test
+# Dichroic Glass
 
-React Three Fiber ile olusturulan, resim veya webcam girdisini 64x64 instanced cam panel mozaigine donusturen Vite uygulamasi.
+A React Three Fiber application that converts an image or webcam stream into a 64x64 mosaic of instanced dichroic glass panels.
 
-## Lokal gelistirme
+## Local development
 
 ```bash
 npm ci
 npm run dev
 ```
 
-Uretim derlemesini kontrol etmek icin:
+Validate a production build with:
 
 ```bash
 npm run lint
 npm run build
 ```
 
-## GitHub Actions ve GHCR
+## Container image
 
-`.github/workflows/container.yml`, `main` dalina gelen her push'ta multi-platform Docker imajini su adreslere yollar:
+The public container image is available from the [GitHub Container Registry](https://github.com/AhmetErenLacinbala/dichroic-glass/pkgs/container/dichroic-glass):
 
-- `ghcr.io/<github-owner>/<repo>:latest`
-- `ghcr.io/<github-owner>/<repo>:main`
-- `ghcr.io/<github-owner>/<repo>:sha-<commit>`
+```bash
+docker pull ghcr.io/ahmeterenlacinbala/dichroic-glass:latest
+```
 
-`v1.2.3` gibi bir tag push edilirse semver tag'leri de uretilir. Pull request'lerde imaj sadece build edilir, registry'ye gonderilmez. Workflow, GitHub'in otomatik `GITHUB_TOKEN` degeriyle calisir; ek bir registry secret'i gerekmez.
+The `.github/workflows/container.yml` workflow builds a multi-platform image after every push to `main` and publishes these tags:
 
-## Sunucuya kurulum
+- `ghcr.io/ahmeterenlacinbala/dichroic-glass:latest`
+- `ghcr.io/ahmeterenlacinbala/dichroic-glass:main`
+- `ghcr.io/ahmeterenlacinbala/dichroic-glass:sha-<commit>`
 
-Gereksinimler:
+Pushing a tag such as `v1.2.3` also generates semantic-version tags. Pull requests are built for validation but are not pushed to the registry. Publishing uses GitHub's automatic `GITHUB_TOKEN`, so no additional registry secret is required.
 
-- Alan adinin A/AAAA kaydi sunucuya yonlendirilmis olmali.
-- Sunucunun 80 ve 443 portlari acik olmali.
-- Docker Engine ve Docker Compose plugin kurulu olmali.
+## Server deployment
 
-Dosyalari sunucuya kopyaladiktan sonra ortam dosyasini olusturun:
+Requirements:
+
+- The domain's A/AAAA record must point to the Docker server.
+- Ports 80 and 443 must be publicly accessible.
+- Docker Engine and the Docker Compose plugin must be installed.
+
+Copy the repository to the server and create the environment file:
 
 ```bash
 cp .env.example .env
 ```
 
-`.env` icinde en az `IMAGE_NAME`, `APP_HOST` ve `ACME_EMAIL` alanlarini gercek degerlerle degistirin. Ardindan:
+Set `APP_HOST` and `ACME_EMAIL` to their production values. `IMAGE_NAME` is already configured for this repository. Then start the stack:
 
 ```bash
 docker compose pull
@@ -48,18 +54,18 @@ docker compose up -d
 docker compose ps
 ```
 
-Traefik HTTP isteklerini HTTPS'e yonlendirir ve Let's Encrypt sertifikasini otomatik alir. HTTPS, tarayicida webcam erisimi icin de gereklidir.
+Traefik redirects HTTP traffic to HTTPS and automatically provisions a Let's Encrypt certificate. HTTPS is also required for browser webcam access.
 
-Watchtower varsayilan olarak her 300 saniyede bir registry'yi kontrol eder. Yalnizca `app` servisi Watchtower etiketi tasidigi icin Traefik ve Watchtower otomatik olarak degistirilmez.
+Watchtower checks the registry every 300 seconds by default. Only the application has the Watchtower enable label, so the Traefik and Watchtower containers are not automatically replaced.
 
-### Private GHCR imaji
+### Private GHCR images
 
-GHCR package public ise sunucuda giris gerekmez. Private ise once `read:packages` yetkili bir GitHub personal access token ile giris yapin:
+The current image is public and does not require authentication. If you make it private, log in with a GitHub personal access token that has the `read:packages` permission:
 
 ```bash
-echo "$GHCR_TOKEN" | docker login ghcr.io -u GITHUB_KULLANICI_ADI --password-stdin
+echo "$GHCR_TOKEN" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
 ```
 
-Watchtower, Docker kimlik bilgilerini `DOCKER_CONFIG_DIR` altindan okur. Compose'u root disinda calistiriyorsaniz `.env` icindeki bu degeri ornegin `/home/deploy/.docker` olarak degistirin.
+Watchtower reads Docker credentials from `DOCKER_CONFIG_DIR`. If Compose runs as a non-root user, change this value in `.env`, for example to `/home/deploy/.docker`.
 
-> Not: Watchtower projesi arsivlenmistir. Compose'taki `DOCKER_API_VERSION=1.44`, yeni Docker Engine surumleriyle bilinen API uyumsuzlugu icin eklenmistir.
+> Note: The Watchtower project is archived. `DOCKER_API_VERSION=1.44` is included in the Compose configuration as a compatibility workaround for newer Docker Engine releases.
